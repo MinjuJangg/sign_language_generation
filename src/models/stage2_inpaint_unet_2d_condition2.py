@@ -581,7 +581,7 @@ class Stage2_InapintUNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditio
         sample: torch.FloatTensor,
         timestep: Union[torch.Tensor, float, int],
         encoder_hidden_states: torch.Tensor,
-        class_labels: Optional[torch.Tensor] = None,
+        #class_labels: Optional[torch.Tensor] = None,
         timestep_cond: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
@@ -684,28 +684,28 @@ class Stage2_InapintUNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditio
         emb = self.time_embedding(t_emb, timestep_cond)  # [bs,1280]
 
 
-        if self.class_embedding is not None:
-            if class_labels is None:
-                raise ValueError("class_labels should be provided when num_class_embeds > 0")
+        # if self.class_embedding is not None:
+        #     if class_labels is None:
+        #         raise ValueError("class_labels should be provided when num_class_embeds > 0")
 
-            if self.config.class_embed_type == "timestep":
+        #     if self.config.class_embed_type == "timestep":
 
-                class_labels = self.time_proj(class_labels)
+        #         class_labels = self.time_proj(class_labels)
 
-                # `Timesteps` does not contain any weights and will always return f32 tensors
-                # there might be better ways to encapsulate this.
-                class_labels = class_labels.to(dtype=sample.dtype)
+        #         # `Timesteps` does not contain any weights and will always return f32 tensors
+        #         # there might be better ways to encapsulate this.
+        #         class_labels = class_labels.to(dtype=sample.dtype)
 
 
-            class_labels = class_labels.squeeze(1)
+        #     class_labels = class_labels.squeeze(1)
 
-            class_emb = self.class_embedding(class_labels).to(dtype=sample.dtype)
+        #     class_emb = self.class_embedding(class_labels).to(dtype=sample.dtype)
 
-            if self.config.class_embeddings_concat:
-                emb = torch.cat([emb, class_emb], dim=-1)
-            else:
+        #     if self.config.class_embeddings_concat:
+        #         emb = torch.cat([emb, class_emb], dim=-1)
+        #     else:
 
-                emb = emb + class_emb
+        #         emb = emb + class_emb
 
         if self.config.addition_embed_type == "text":
             aug_emb = self.add_embedding(encoder_hidden_states)
