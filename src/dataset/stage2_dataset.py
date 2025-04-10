@@ -81,23 +81,31 @@ class InpaintDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
 
-        s_img_path = os.path.join(self.image_root_path, item["source_image"].replace(".jpg", ".png"))
+        s_img_path = os.path.join(self.image_root_path, item["source_image"])
         s_img = Image.open(s_img_path).convert("RGB").resize(self.size, Image.BICUBIC)
 
         black_img = Image.new("RGB", self.size, (0, 0, 0))
         s_img_mask = Image.new("RGB", (self.size[0] * 2, self.size[1]))
-        s_img_mask.paste(s_img, (0, 0))
+        # s_img_mask.paste(s_img, (0, 0))
+        # s_img_mask.paste(black_img, (self.size[0], 0))
+
+        t_img_path = os.path.join(self.image_root_path, item["target_image"])
+        t_img = Image.open(t_img_path).convert("RGB").resize(self.size, Image.BICUBIC)
+        
+        p_img_path = os.path.join(self.image_root_path, item["prev_image"])
+        p_img = Image.open(p_img_path).convert("RGB").resize(self.size, Image.BICUBIC)
+        s_img_mask.paste(p_img, (0, 0))
         s_img_mask.paste(black_img, (self.size[0], 0))
 
-        t_img_path = os.path.join(self.image_root_path, item["target_image"].replace(".jpg", ".png"))
-        t_img = Image.open(t_img_path).convert("RGB").resize(self.size, Image.BICUBIC)
 
         st_img = (Image.new("RGB", (self.size[0] * 2, self.size[1])))
-        st_img.paste(s_img, (0, 0))
+        st_img.paste(p_img, (0, 0))
         st_img.paste(t_img, (self.size[0], 0))
+        
 
-        s_pose = Image.open(s_img_path.replace("/train_all_png/", "/openpose_all_img/").replace(".png", "_pose.jpg")).convert("RGB").resize(self.size, Image.BICUBIC)
-        t_pose = Image.open(t_img_path.replace("/train_all_png/", "/openpose_all_img/").replace(".png", "_pose.jpg")).convert("RGB").resize(self.size, Image.BICUBIC)
+
+        s_pose = Image.open(p_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize(self.size, Image.BICUBIC)
+        t_pose = Image.open(t_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize(self.size, Image.BICUBIC)
         st_pose = Image.new("RGB", (self.size[0] * 2, self.size[1]))
         st_pose.paste(s_pose, (0, 0))
         st_pose.paste(t_pose, (self.size[0], 0))
