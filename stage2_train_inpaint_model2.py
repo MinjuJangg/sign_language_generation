@@ -25,7 +25,7 @@ from diffusers.utils import check_min_version, is_wandb_available
 from src.dataset.stage2_dataset import InpaintDataset, InpaintCollate_fn
 from transformers import CLIPVisionModelWithProjection
 from transformers import Dinov2Model
-from src.models.stage2_inpaint_unet_2d_condition import Stage2_InapintUNet2DConditionModel
+from src.models.stage2_inpaint_unet_2d_condition2 import Stage2_InapintUNet2DConditionModel
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -83,15 +83,16 @@ class SDModel(torch.nn.Module):
             conditioning_channels=3)
 
 
-    def forward(self, noisy_latents, timesteps, simg_f_p, timg_f_g, pose_f):
+    def forward(self, noisy_latents, timesteps, simg_f_p,  pose_f):
 
         extra_image_embeddings_p = self.image_proj_model_p(simg_f_p)
-        extra_image_embeddings_g = timg_f_g
+        #extra_image_embeddings_g = timg_f_g
 
-        encoder_image_hidden_states = torch.cat([extra_image_embeddings_p ,extra_image_embeddings_g], dim=1)
+        #encoder_image_hidden_states = torch.cat([extra_image_embeddings_p ,extra_image_embeddings_g], dim=1)
+        encoder_image_hidden_states = extra_image_embeddings_p
         pose_cond = self.pose_proj(pose_f)
 
-        pred_noise = self.unet(noisy_latents, timesteps, class_labels=timg_f_g, encoder_hidden_states=encoder_image_hidden_states,my_pose_cond=pose_cond).sample
+        pred_noise = self.unet(noisy_latents, timesteps,  encoder_hidden_states=encoder_image_hidden_states,my_pose_cond=pose_cond).sample
         return pred_noise
 
 
@@ -134,6 +135,27 @@ def checkpoint_model(checkpoint_folder, ckpt_id, model, epoch, last_global_step,
     else:
         logging.warning(f"Failure {status_msg}")
     return
+import torchvision.utils as vutils
+import os
+
+def save_debug_batch(batch, step, save_dir="./debug_failed_batch"):
+    os.makedirs(save_dir, exist_ok=True)
+
+    for i in range(len(batch["source_target_image"])):
+        # 저장할 기본 이름 prefix
+        prefix = f"step{step}_sample{i}"
+
+        # 저장: source_target_image (VAE 인코딩 대상)
+        vutils.save_image(batch["source_target_image"][i].cpu(), f"{save_dir}/{prefix}_src_tgt.png", normalize=True)
+
+        # 저장: vae_source_mask_image
+        vutils.save_image(batch["vae_source_mask_image"][i].cpu(), f"{save_dir}/{prefix}_mask.png", normalize=True)
+
+        # 저장: source_image (DINO input)
+        vutils.save_image(batch["source_image"][i].cpu(), f"{save_dir}/{prefix}_src.png", normalize=True)
+
+        # 저장: source_target_pose (pose tensor도 저장)
+        torch.save(batch["source_target_pose"][i].cpu(), f"{save_dir}/{prefix}_pose.pt")
 
 
 
@@ -176,16 +198,16 @@ def main():
 
     # Load model
     image_encoder_p = Dinov2Model.from_pretrained(args.image_encoder_p_path)
-    image_encoder_g = CLIPVisionModelWithProjection.from_pretrained(args.image_encoder_g_path)
+    #image_encoder_g = CLIPVisionModelWithProjection.from_pretrained(args.image_encoder_g_path)
 
     vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
 
     unet = Stage2_InapintUNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet",
-                                                   in_channels=9, class_embed_type="projection" ,projection_class_embeddings_input_dim=1024,
+                                                   in_channels=9, class_embed_type="None" ,projection_class_embeddings_input_dim=1024,
                                                   low_cpu_mem_usage=False, ignore_mismatched_sizes=True)
 
     image_encoder_p.requires_grad_(False)
-    image_encoder_g.requires_grad_(False)
+   # image_encoder_g.requires_grad_(False)
     vae.requires_grad_(False)
 
     sd_model = SDModel(unet=unet)
@@ -235,7 +257,8 @@ def main():
         sampler=train_sampler,
         collate_fn=InpaintCollate_fn,
         batch_size=args.train_batch_size,
-        num_workers=2,)
+        num_workers=2,
+        drop_last=True)
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -268,7 +291,7 @@ def main():
     vae.to(accelerator.device, dtype=weight_dtype)
     unet.to(accelerator.device, dtype=weight_dtype)
     image_encoder_p.to(accelerator.device, dtype=weight_dtype)
-    image_encoder_g.to(accelerator.device, dtype=weight_dtype)
+    #image_encoder_g.to(accelerator.device, dtype=weight_dtype)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -342,8 +365,9 @@ def main():
                     cond_image_feature_p = (cond_image_feature_p.last_hidden_state)
 
 
-                    cond_image_feature_g = image_encoder_g(batch["target_image"].to(accelerator.device, dtype=weight_dtype), ).image_embeds
-                    cond_image_feature_g =cond_image_feature_g.unsqueeze(1)
+                    #cond_image_feature_g = image_encoder_g(batch["target_image"].to(accelerator.device, dtype=weight_dtype), ).image_embeds
+                   #
+                   # cond_image_feature_g =cond_image_feature_g.unsqueeze(1)
 
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
@@ -359,15 +383,32 @@ def main():
 
                 # Add noise to the latents according to the noise magnitude at each timestep (this is the forward diffusion process)
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                
+                print("noisy_latents:", noisy_latents.shape)
+                print("masked_latents:", masked_latents.shape)
+                print("mask:", mask.shape)
 
-                noisy_latents = torch.cat([noisy_latents, mask, masked_latents], dim=1)
+                try:
+                    noisy_latents = torch.cat([noisy_latents, mask, masked_latents], dim=1)
+                except Exception as e:
+                    print("💥 Batch shape mismatch at step", global_steps)
+                    print("Error:", e)
+                    
+                    save_debug_batch(batch, global_steps)  # 🔽 튕긴 배치 저장
+
+                    raise e  # 에러 다시 던져서 멈추게
+
+
+
+                #noisy_latents = torch.cat([noisy_latents, mask, masked_latents], dim=1)
                 # Get the text embedding for conditioning
 
 
                 cond_pose = batch["source_target_pose"].to(dtype=weight_dtype)
+                
 
                 # Predict the noise residual
-                model_pred = sd_model(noisy_latents, timesteps, cond_image_feature_p,cond_image_feature_g, cond_pose, )
+                model_pred = sd_model(noisy_latents, timesteps, cond_image_feature_p,cond_pose, )
 
                 # Get the target for loss depending on the prediction type
                 if noise_scheduler.config.prediction_type == "epsilon":
@@ -398,6 +439,7 @@ def main():
                     checkpoint_model(
                         args.output_dir, global_steps, sd_model, epoch, global_steps
                     )
+
 
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
