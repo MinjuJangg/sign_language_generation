@@ -249,7 +249,7 @@ class Stage2_InpaintDiffusionPipeline(DiffusionPipeline):
             num_images_per_prompt,
             do_classifier_free_guidance,
             s_img_proj_f=None,
-           # pred_t_img_embed=None,
+            #pred_t_img_embed=None,
             lora_scale: Optional[float] = None,
 
     ):
@@ -272,6 +272,7 @@ class Stage2_InpaintDiffusionPipeline(DiffusionPipeline):
 
 
         if do_classifier_free_guidance:
+            
 
             s_image_proj_f = torch.cat([s_image_proj_f], dim=1)
 
@@ -413,7 +414,7 @@ class Stage2_InpaintDiffusionPipeline(DiffusionPipeline):
             mask: Optional[torch.FloatTensor] = None,
             s_img_proj_f: Optional[torch.FloatTensor] = None,
             st_pose_f: Optional[torch.FloatTensor] = None,
-            #pred_t_img_embed: Optional[torch.FloatTensor] = None,
+           # pred_t_img_embed: Optional[torch.FloatTensor] = None,
         ):
 
 
@@ -449,7 +450,7 @@ class Stage2_InpaintDiffusionPipeline(DiffusionPipeline):
         feature_f = feature_f.repeat(bs * num_images_per_prompt, 1, 1).to(dtype=torch.float16, device=device)
 
         #target feature
-        #prior_embed = pred_t_img_embed.repeat(bs * num_images_per_prompt, 1, 1).to(dtype=torch.float16, device=device)
+       # prior_embed = pred_t_img_embed.repeat(bs * num_images_per_prompt, 1, 1).to(dtype=torch.float16, device=device)
 
 
         if do_classifier_free_guidance:
@@ -457,13 +458,13 @@ class Stage2_InpaintDiffusionPipeline(DiffusionPipeline):
             neg_feature_f = torch.zeros(feature_f.shape).to(device, dtype=torch.float16)
             feature_f = torch.cat([neg_feature_f, feature_f], dim=0)
 
-            # target global feature
+            # # target global feature
             # neg_prior_embed = torch.zeros(prior_embed.shape).to(device, dtype=torch.float16)
             # prior_embed = torch.cat([neg_prior_embed, prior_embed], dim=0)
 
         else:
             feature_f = feature_f.repeat(bs * num_images_per_prompt, 1, 1)
-            #prior_embed = pred_t_img_embed.repeat(bs * num_images_per_prompt, 1, 1)
+           # prior_embed = pred_t_img_embed.repeat(bs * num_images_per_prompt, 1, 1)
 
 
 
@@ -502,7 +503,7 @@ class Stage2_InpaintDiffusionPipeline(DiffusionPipeline):
 
 
                 noise_pred = \
-                self.unet(noise_mask_maskedimage_latents, t, class_labels=None, encoder_hidden_states=feature_f,
+                self.unet(noise_mask_maskedimage_latents, t,  encoder_hidden_states=feature_f,
                           my_pose_cond=pose_cond, cross_attention_kwargs=cross_attention_kwargs, return_dict=False)[0]
 
 

@@ -184,6 +184,7 @@ parser.add_argument(
 
 parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
 
+parser.add_argument('--project_name', type=str, default="default_project", help="Wandb project name")
 
 
 

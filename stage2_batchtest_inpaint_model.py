@@ -94,7 +94,7 @@ def inference(args, rank, select_test_datas):
     pose_proj_dict = {}
     unet_dict = {}
 
-    image_encoder_g = CLIPVisionModelWithProjection.from_pretrained(args.image_encoder_g_path).to(device).eval()
+    #image_encoder_g = CLIPVisionModelWithProjection.from_pretrained(args.image_encoder_g_path).to(device).eval()
     image_encoder_p = Dinov2Model.from_pretrained(args.image_encoder_p_path).to(device).eval()
 
     image_proj_model_p = ImageProjModel_p(in_dim=1536, hidden_dim=768, out_dim=1024).to(device).eval()
@@ -123,8 +123,8 @@ def inference(args, rank, select_test_datas):
     pipe = Stage2_InpaintDiffusionPipeline.from_pretrained(args.pretrained_model_name_or_path,torch_dtype=torch.float16).to(device)
 
     pipe.unet= Stage2_InapintUNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet",
-                                           in_channels=9, class_embed_type="projection",
-                                           projection_class_embeddings_input_dim=1024,torch_dtype=torch.float16,
+                                           in_channels=9, class_embed_type=None,
+                                           projection_class_embeddings_input_dim=None,torch_dtype=torch.float16,
                                            low_cpu_mem_usage=False, ignore_mismatched_sizes=True).to(device)
 
     pipe.unet.load_state_dict(unet_dict)
@@ -150,13 +150,17 @@ def inference(args, rank, select_test_datas):
         s_img = Image.open(s_img_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
         t_img = Image.open(t_img_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
 
+        p_img_path = (args.img_path + data["source_image"])
+        p_img = Image.open(p_img_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
+
+
         black_image = Image.new("RGB", s_img.size, (0, 0, 0))
         s_img_t_mask = Image.new("RGB", (s_img.width * 2, s_img.height))
-        s_img_t_mask.paste(s_img, (0, 0))
+        s_img_t_mask.paste(p_img, (0, 0))
         s_img_t_mask.paste(black_image, (s_img.width, 0))
 
-        s_pose = Image.open(s_pose_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
-        t_pose = Image.open(t_pose_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
+        s_pose = Image.open(p_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
+        t_pose = Image.open(t_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)
         st_pose = Image.new("RGB", (s_pose.width * 2, s_pose.height))
         st_pose.paste(s_pose, (0, 0))
         st_pose.paste(t_pose, (s_pose.width, 0))
@@ -173,16 +177,16 @@ def inference(args, rank, select_test_datas):
         cond_st_pose = torch.unsqueeze(img_transform(st_pose), 0)
         st_pose_f = pose_proj(cond_st_pose.to(device=device))  # t_pose
 
-        if args.json_path.split('/')[-1].split('_')[0] == "train":
-            clip_processor_s_img = clip_image_processor(images=t_img, return_tensors="pt").pixel_values
-            pred_t_img_embed = (image_encoder_g(clip_processor_s_img.to(device)).image_embeds).unsqueeze(1)
-        #
-        elif args.json_path.split('/')[-1].split('_')[0] == "test":
-            pred_t_img_embed = torch.tensor(np.load(args.target_embed_path + s_img_path.split("/")[-1].replace(".png", '_to_') \
-                                                    + t_img_path.split("/")[-1].replace(".png", '.npy'))).to(device)
-            pred_t_img_embed = pred_t_img_embed.unsqueeze(1)
-        else:
-            raise ValueError("Check the input JSON file path")
+        # if args.json_path.split('/')[-1].split('_')[0] == "train":
+        #     clip_processor_s_img = clip_image_processor(images=t_img, return_tensors="pt").pixel_values
+        #     pred_t_img_embed = (image_encoder_g(clip_processor_s_img.to(device)).image_embeds).unsqueeze(1)
+        # #
+        # elif args.json_path.split('/')[-1].split('_')[0] == "test":
+        #     pred_t_img_embed = torch.tensor(np.load(args.target_embed_path + s_img_path.split("/")[-1].replace(".png", '_to_') \
+        #                                             + t_img_path.split("/")[-1].replace(".png", '.npy'))).to(device)
+        #     pred_t_img_embed = pred_t_img_embed.unsqueeze(1)
+        # else:
+        #     raise ValueError("Check the input JSON file path")
 
 
         output = pipe(
@@ -192,7 +196,6 @@ def inference(args, rank, select_test_datas):
                 vae_image=vae_image,
                 s_img_proj_f=s_img_proj_f,
                 st_pose_f=st_pose_f,
-                pred_t_img_embed = pred_t_img_embed,
                 num_images_per_prompt=4,
                 guidance_scale=args.guidance_scale,
                 generator=generator,
@@ -201,11 +204,14 @@ def inference(args, rank, select_test_datas):
 
 
         vis_st_pose = Image.new("RGB", (args.img_weigh*2, args.img_height))
-        vis_st_pose.paste(Image.open(s_pose_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (0, 0))
-        vis_st_pose.paste(Image.open(t_pose_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (args.img_weigh, 0))
+        vis_st_pose.paste((Image.open(p_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)), (0, 0))
+        vis_st_pose.paste((Image.open(t_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC)), (args.img_weigh, 0))
+
+        #vis_st_pose.paste((Image.p_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (0, 0))
+        #vis_st_pose.paste((Image.t_img_path.replace("/img/", "/pose_img/").replace(".jpg", "_pose.jpg")).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (args.img_weigh, 0))
 
         vis_st_image = Image.new("RGB", (args.img_weigh*2, args.img_height))
-        vis_st_image.paste(Image.open(s_img_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (0, 0))
+        vis_st_image.paste(Image.open(p_img_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (0, 0))
         vis_st_image.paste(Image.open(t_img_path).convert("RGB").resize((args.img_weigh, args.img_height), Image.BICUBIC), (args.img_weigh, 0))
 
 
@@ -222,13 +228,13 @@ def inference(args, rank, select_test_datas):
             all_ssim.append(max_value)
             max_index = ssim_values.index(max_value)
             grid_metric = output.images[max_index].crop((args.img_weigh,0, args.img_weigh*2,args.img_height))
-            grid_metric.save(save_dir_metric + s_img_path.split("/")[-1].replace(".png", "") + "_to_" + t_img_path.split("/")[-1])
+            grid_metric.save(save_dir_metric + s_img_path.split("/")[-1].replace(".jpg", "") + "_to_" + t_img_path.split("/")[-1])
         else:
             output.images.insert(0, vis_st_pose)
             output.images.insert(0, vis_st_image)
             grid = image_grid(output.images, 2, 3)
             grid.save(
-                save_dir + s_img_path.split("/")[-1].replace(".png", "") + "_to_" +
+                save_dir + s_img_path.split("/")[-1].replace(".jpg", "") + "_to_" +
                 t_img_path.split("/")[-1])
 
     end_time =time.time()
