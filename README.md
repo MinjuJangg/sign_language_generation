@@ -69,7 +69,7 @@ Video
 ## System Architecture
 
 
-![Pipeline](그림1.png)
+![Pipeline](1.png)
 
 ### Input
 
@@ -117,7 +117,7 @@ Video
 
 ### 3. Efficient Inference Architecture
 
-![Pipeline](그림2.png)
+![Pipeline](2.png)
 
 - Diffusion Transformer 기반 구조 적용
 - Flow Matching 기법 도입
