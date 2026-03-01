@@ -14,6 +14,8 @@ Temporal-aware Conditional Generation Framework
 
 본 프로젝트는 **수어 양방향 번역(Sign ↔ Text)** task로 수어 번역, text to gloss, gloss to pose, pose to image 총 4가지로 나누어 진행
 
+[pipeline] : Spoken Language -> Text-to-Gloss -> Gloss-to-Pose -> Pose-to-Image -> Video
+
 본 레포지토리는 전체 프로젝트 중 **Pose 정보를 기반으로 자연스러운 수어 이미지 프레임을 생성** 영역을 다룸
 
 기존 수어 생성 연구는 단일 프레임 생성 중심이거나 Diffusion 기반 구조를 단순 적용하는 수준에 머물렀으며,  
@@ -50,7 +52,7 @@ Temporal-aware Conditional Generation Framework
 - "이 프레임이 이전 프레임과 자연스럽게 이어지는가?" 를 기준으로 설계
 
 
-## Proposed Pipeline
+
 Spoken Language
 ↓
 Text-to-Gloss
@@ -65,6 +67,9 @@ Video
 
 
 ## System Architecture
+
+
+![Pipeline](그림1.png)
 
 ### Input
 
@@ -111,6 +116,8 @@ Video
 
 
 ### 3. Efficient Inference Architecture
+
+![Pipeline](그림2.png)
 
 - Diffusion Transformer 기반 구조 적용
 - Flow Matching 기법 도입
