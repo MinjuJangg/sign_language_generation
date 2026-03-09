@@ -11,6 +11,8 @@ Temporal-aware Conditional Generation Framework
 
 ## Overview
 
+![example](example.gif)
+
 
 본 프로젝트는 **수어 양방향 번역(Sign ↔ Text)** task로 수어 번역, text to gloss, gloss to pose, pose to image 총 4가지로 나누어 진행
 
